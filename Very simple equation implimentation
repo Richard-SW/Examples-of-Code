@@ -1,0 +1,21 @@
+#include <math.h> 
+#include <stdio.h> 
+
+int main(void) 
+{
+	
+	int Voltage = 5;
+	float Time = 0;
+	float RC = 10;
+	float VO = 5;
+	
+	
+	while (VO >1) 
+    {VO = Voltage*exp(-Time/RC);
+    printf("Time %f ", Time) ;
+   	printf("Voltage %f \n ", VO); 
+   	
+	Time++;} //Add one to time variable
+
+	return 0;
+}
