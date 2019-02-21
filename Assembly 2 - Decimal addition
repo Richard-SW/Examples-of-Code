@@ -1,0 +1,86 @@
+#include"p16F1937.inc"
+; TODO INSERT CONFIG CODE HERE USING CONFIG BITS GENERATOR
+
+    UDATA
+num1  res 1
+num2  res 1
+num3  res 1
+Total res 1
+
+RES_VECT  CODE    0x0000            ; processor reset vector
+    GOTO    START                   ; go to beginning of program
+
+; TODO ADD INTERRUPTS HERE IF USED
+
+MAIN_PROG CODE                      ; let linker place main program
+
+START
+
+;clear Ports A and B
+
+    BANKSEL ANSELA
+    CLRF    ANSELA
+    CLRF    ANSELB
+
+; Sets Port A as input
+    MOVLW   0X01
+    BANKSEL TRISA
+    MOVWF   TRISA
+
+; Sets Port B as output
+    MOVLW   0X00
+    BANKSEL TRISB
+    MOVWF   TRISB
+
+;Make num1, num2 and num3 equal to 10,7 and 15
+
+    BANKSEL num1 ; Move to num1
+    MOVLW   0X0A ; Move value of 10 to num 1
+    MOVWF   num1 ; Move num1 to working register
+
+    MOVLW   0X00 ; Clear working register
+
+    BANKSEL num2 ; Move to bank of registers containing num2
+    MOVLW   0X07 ; Move 0X07 value to num2
+    MOVWF   num2 ; Move num2 to working register
+
+    MOVLW   0X00 ; Clear working register
+
+    BANKSEL num3 ; Move to bank of registers containing num3
+    MOVLW   0X0F ; Move value 0x0F to  num3
+    MOVWF   num3 ; Move num3 to working register
+
+    MOVLW   0X00 ; Clear working register
+
+;Add three values to working register
+
+    BANKSEL Total ; Moves to bank of registers containing "Total"
+    ADDWF   num1, 0 ; Adds num1 to Total
+    ADDWF   num2, 0 ; Adds num2 to Total
+    ADDWF   num3, 0 ; Adds num3 to Total
+    MOVWF   Total ; Moves Total to working register
+
+;Check if an input is given and decide where the program will go
+
+    BANKSEL PORTA
+    BTFSC   PORTA, 0 ; Perfoms bit test, skips next line if bit in position 0 is equal to 0
+    GOTO    but_press ; Sends program to label but_press
+
+; If button is not pressed, output 0 to LATB
+
+    BANKSEL LATB ; Moves to bank of registers containing LATB
+    MOVLW   0X00 ; Moves 0X00 value to LATB
+    MOVWF   LATB ; Moves LATB to working register
+    
+    GOTO START
+
+;if button is pressed output total to LEDs
+
+but_press
+    BANKSEL LATB ; Moves to bank of registers to LATB
+    MOVWF   Total ; Moves total to working register
+    MOVWF   LATB ; Moves LATB to working register
+
+    GOTO START                          ; loop forever
+
+    END
