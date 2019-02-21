@@ -1,0 +1,139 @@
+#include "p16F1937.inc"
+
+; CONFIG1
+; __config 0xFFFA
+ __CONFIG _CONFIG1, _FOSC_INTOSC & _WDTE_OFF & _PWRTE_OFF & _MCLRE_ON & _CP_OFF & _CPD_OFF & _BOREN_ON & _CLKOUTEN_OFF & _IESO_ON & _FCMEN_ON
+; CONFIG2
+; __config 0xFFFF
+ __CONFIG _CONFIG2, _WRT_OFF & _VCAPEN_OFF & _PLLEN_ON & _STVREN_ON & _BORV_LO & _LVP_ON
+
+    UDATA
+Shifty res 1
+counter1 res 1
+counter2 res 1
+
+RES_VECT  CODE    0x0000            ; processor reset vector
+    GOTO    START                   ; go to beginning of program
+
+; TODO ADD INTERRUPTS HERE IF USED
+
+MAIN_PROG CODE                      ; let linker place main program
+
+START
+
+;Set clock
+
+    BANKSEL OSCCON
+    MOVLW   b'10000010'
+    MOVWF   OSCCON
+
+;Set Board to Digital
+
+    BANKSEL ANSELA
+    CLRF    ANSELA
+    BANKSEL ANSELB
+    CLRF    ANSELB
+
+;Set port Directions
+
+    MOVLW   0X00
+    BANKSEL TRISB
+    MOVWF   TRISB
+
+;Clear Ports A and B
+
+    BANKSEL PORTA
+    MOVLW   0X00
+    MOVWF   PORTA
+    BANKSEL PORTB
+    MOVLW   0X00
+    MOVWF   PORTB
+
+;Set Shifty to "10000000" binary
+
+    MOVLW   0X00
+    BANKSEL Shifty
+    MOVLW   0X80
+    MOVWF   Shifty
+
+;Move 0X80 value to LATB
+
+    BANKSEL LATB
+    MOVWF   LATB
+
+;Set up if function. If LATB does not equal 00000001 shift high value logical right
+
+
+IF1
+
+; Resets values of the delay
+
+    BANKSEL counter1 ; Moves to bank containing counter 1
+    MOVLW   0X08 ; Moves value 0X08 to counter 1
+    MOVWF   counter1 ; Moves counter 1 to working register
+
+    BANKSEL counter2 ;moves to bank of registers containing counter 2
+    MOVLW   0XF3 ; Moves value 0XF3 to counter 2
+    MOVWF   counter2 ; Moves counter 2 to working register
+    Call    DELAY_SUBROUTINE ;Calls up delay subroutine, makes code jump to delay subroutine
+
+
+; Move shifting bit to logical right
+
+    MOVLW   0X00 ; Clears working register
+    BANKSEL Shifty ; Moves to bank of registers containing shifting bit
+    LSRF    Shifty, 1 ; Shifts high along to the logical right
+
+
+; Outputs result to LATB
+
+    MOVLW   0X00 ; Clears working register
+    ADDWF   Shifty, 0 ; Adds to the working register
+    BANKSEL LATB ; Moves to LATB
+    MOVWF   LATB ;Moves LATB to working register
+
+
+; Checks if shifting bit is in desired location, if not, repeats process
+
+    BANKSEL Shifty ; Moves to bank containing the shifting bit
+    BTFSS   Shifty, 0 ; Performs bit test, skips next line if bit in position 0 is 1
+    GOTO    IF1 ; Goes to label IF1
+    GOTO    IF2 ; Goes to label IF2
+
+IF2
+;resets delay values
+
+    BANKSEL counter1 ; Moves to bank containing Counter 1
+    MOVLW   0X08 ; Adds 0X08 Value to counter 1
+    MOVWF   counter1 ; Moves counter 1 to working register
+
+    BANKSEL counter2 ;Moves to bank containing counter 2
+    MOVLW   0XF3 ; Moves 0XF3 value to counter 2
+    MOVWF   counter2 ; Moves counter 2 to working register
+
+    Call    DELAY_SUBROUTINE ;Calls up delay subroutine, makes code jump to delay subroutine
+    GOTO    START ; Go to label start
+
+    GOTO    $
+
+
+DELAY_SUBROUTINE
+Outer_Loop
+    MOVLW   0X00 ;Clears working register
+    BANKSEL counter2 ; Moves to bank of registers containing counter 2
+    MOVLW   0XF3 ; Moves value 243 to counter 2
+    MOVWF   counter2 ; moves counter 2 to working register
+
+    BANKSEL counter1 ; Moves to bank of registers containing counter 1
+    DECFSZ  counter1, 1 ;decreases and if value is not 0 skips next line
+    GOTO    Inner_Loop ; Go to label "Inner Loop"
+    RETLW   0 ; After delay has been called return to point where called putting the literal value in the working register
+
+Inner_Loop
+    NOP ; Gives code extra command to give required delay time
+    BANKSEL counter2 ; Moves to counter 2
+    DECFSZ  counter2, 1 ; decreases and if value is not 0 skips next line
+    GOTO    Inner_Loop ; Go to label "Inner Loop"
+    GOTO    Outer_Loop ; Got to label "Outer Loop"
+
+    END
