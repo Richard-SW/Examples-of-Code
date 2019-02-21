@@ -1,0 +1,259 @@
+
+//------------------------------------------------------------------------
+// CAR PARK ROUTINE.
+//------------------------------------------------------------------------
+/*
+ *Car Park Control Program
+ *This Program operates a Car Park connected to the output ports
+ */
+
+#define drive_in_1 PORTA.B0 //Defining the outputs on the car park to their logic bits
+#define drive_in_2 PORTA.B1
+#define drive_in_3 PORTA.B2
+#define drive_in_4 PORTA.B3
+
+#define D4 PORTB.B0  //Defining the LCD screen
+#define D5 PORTB.B1
+#define D6 PORTB.B2
+#define D7 PORTB.B3
+#define RS PORTB.B4
+#define EN PORTB.B5
+
+#define Ticket PORTC.B0 //Defining Buttons and LEDs
+#define Paid PORTC.B1
+#define Help_IN PORTC.B2
+#define Help_OUT PORTC.B3
+#define Stop_IN PORTC.B4
+#define Go_IN PORTC.B5
+#define Stop_OUT PORTC.B6
+#define GO_OUT PORTC.B7
+
+#define SENS2 PORTD.B0
+#define SENS4 PORTD.B1
+#define SENS3 PORTD.B2
+#define SENS1 PORTD.B3
+
+#define Barrier_Closed PORTD.B5
+#define Barrier_Open PORTD.B7
+
+//LCD module Connections
+sbit LCD_RS at RB4_bit;
+sbit LCD_EN at RB5_bit;
+sbit LCD_D4 at RB0_bit;
+sbit LCD_D5 at RB1_bit;
+sbit LCD_D6 at RB2_bit;
+sbit LCD_D7 at RB3_bit;
+
+sbit LCD_RS_Direction at TRISB4_bit;
+sbit LCD_EN_Direction at TRISB5_bit;
+sbit LCD_D4_Direction at TRISB0_bit;
+sbit LCD_D5_Direction at TRISB1_bit;
+sbit LCD_D6_Direction at TRISB2_bit;
+sbit LCD_D7_Direction at TRISB3_bit;
+//end LCD module connections
+
+char txt1[] = "Barrier Opening";
+char txt2[] = "Barrier Closing";
+char txt3[] = "Call For Help";
+char txt4[] = "LCD Screen";
+char txt5[] = "NO SPACES";
+char txt6[] = "PLEASE WAIT FOR";
+char txt7[] = "ASSISTANCE";
+char txt8[] = "AVAILABLE";
+char txt9[5];          //added
+
+int Spacesleft = 23; //Integer defining the number of spaces left in the car park
+
+void setup() {  //Sets up Ports and variables for the car park
+     ANSEL = 0;
+     ANSELH = 0;
+
+     TRISA = 0B00000000;
+     TRISC = 0B00001111;
+     TRISD = 0B11111111;
+
+     PORTA = 0;
+     PORTB = 0;
+     PORTC = 0;
+     PORTD = 0;
+
+     Lcd_Init(); // Initialise LCD
+     Lcd_Cmd(_LCD_CURSOR_OFF);
+
+}
+
+//---------------------------------------------------------------
+// This set of functions control the traffic lights.
+
+void SetLightsIn() {
+//Lights when Processing Car In
+  Stop_IN = 0;
+  Go_IN = 1;
+  GO_OUT= 0;
+  Stop_OUT = 1;
+}
+void SetLightsOut() {
+//Lights when processing car out
+  Go_IN = 0;
+  Stop_IN = 1;
+  Stop_OUT = 0;
+  GO_OUT= 1;
+}
+void SetLightsRed() {
+//Turn All Lights Red
+  Go_IN = 0;
+  Stop_IN = 1;
+  GO_OUT= 0;
+  Stop_OUT = 1;
+}
+
+//------------------------------------------------------------------
+// Raise or lower the barrier in a pair of functions
+
+void OpenCarPark() {         //Function for opening the Car Park Barrier
+
+  //LCD Display
+  LCD_Cmd(_LCD_CLEAR);
+  LCD_Out(1,1,txt1);
+  // Open the barrier...
+  while (Barrier_Open==1){
+         PORTA= 0X09;
+         Delay_ms(100);
+         PORTA = 0X0C;
+         Delay_ms(100);
+         PORTA = 0X06;
+         Delay_ms(100);
+         PORTA = 0X03;
+         Delay_ms(100);
+  }
+}
+
+void CloseCarPark() {       //Function for closing the Car Park Barrier
+  LCD_Cmd(_LCD_CLEAR);
+  LCD_Out(1,1,txt2);
+  // Close the barrier...
+  while (Barrier_Closed==1){
+         PortA = 0X03;
+         Delay_ms(100);
+         PortA = 0X06;
+         Delay_ms(100);
+         PortA = 0X0C;
+         Delay_ms(100);
+         PortA = 0X09;
+         Delay_ms(100);
+  }
+}
+
+//------------------------------------------------------------------
+// This function sets everything in the carpark to a default rest
+// state so we know what things are set to before we start anything.
+
+void RestCarPark() {
+  SetLightsRed();
+  closeCarPark();// This should not do anything because the barrier
+                 // should be down anyway.
+  Lcd_Cmd(_LCD_CURSOR_OFF);  //ClearLCD
+}
+
+//-----------------------------------------------------------------
+// Now we can put the various functions together to process a car
+// moving through the car park.
+
+void ProcessCarIn() {
+  SetLightsIn();
+  if (SENS4==1) {
+    // Just in case they take a ticket but don't go in
+    // LABView Control here?
+    RestCarPark();
+  }
+  while (SENS3==1) {
+    OpenCarPark();
+  }
+  while (SENS2==1) {
+    SetLightsRed();
+    CloseCarPark();
+    // NOTE -- this is the same set of calls as RestCarPark()
+    //         but we put them like this as we're processing
+    //         a car, not resting the car park state.
+  }
+  while (SENS1==1) {
+    SpacesLeft--;
+  }
+}
+
+void ProcessCarOut() {
+  SetLightsOut();
+  while (SENS1==1) {
+    // Just in case they take a ticket but re-enter
+    // LABView control here?
+    RestCarPark();
+  }
+  while (SENS2==1) {
+    OpenCarPark();
+  }
+  while (SENS3==1) {
+    SetLightsRed();
+    CloseCarPark();
+    // NOTE -- this is the same set of calls as RestCarPark()
+    //         but we put them like this as we're processing
+    //         a car, not resting the car park state.
+  }
+  while (SENS4==1) {
+    SpacesLeft++;
+  }
+}
+
+//-------------------------------------------------------------
+//MAIN CAR PARK FUNCTION USING FUNCTIONS DEFINED ABOVE
+
+void main() {
+  // Initialise the Program
+  setup();
+  // Now we want to loop forever on the assumption that the
+  // car park will continue unless we unplug it.
+  while (1) {
+    // We want to display a message if there's no spaces
+    ByteToStr(Spacesleft,txt9);
+    Lcd_Out(1,13,txt9);
+    Lcd_Out(1,1,"Free Spaces");
+    if (Ticket==1) {
+      if (Spacesleft > 0) {
+        ProcessCarIn ();
+      }
+      else {
+        Lcd_Cmd(_LCD_CLEAR);
+        LCD_Out(1,1,txt5);
+        LCD_Out(2,1,txt8);
+        delay_ms(2000);
+        Lcd_Cmd(_LCD_CLEAR);
+      }
+    }
+    // They can exit without any hinderance
+    if (Paid==1) {
+      ProcessCarOut ();
+    }
+    // For now treat the incoming and outgoing help
+    // messages the same
+    
+    if (Help_IN==1) {
+      Lcd_Cmd(_LCD_CLEAR);
+      LCD_Out(1,1,txt6);
+      LCD_out(2,1,txt7);
+      delay_ms(2000);
+      Lcd_Cmd(_LCD_CLEAR);
+      
+      //Space here to integrate with LABView
+
+    }
+    if (Help_OUT==1) {
+      Lcd_Cmd(_LCD_CLEAR);
+      LCD_Out(1,1,txt6);
+      LCD_out(2,1,txt7);
+      delay_ms(2000);
+      Lcd_Cmd(_LCD_CLEAR);
+      
+      //Space here to integrate with LABView
+
+    }
+  }
+}
