@@ -1,0 +1,352 @@
+//------------------------------------------------------------------------------
+// WATER FILTRATION SYSTEM.
+//------------------------------------------------------------------------------
+
+/*
+   This program simulates the flow of water through a pathogen filtration
+   system by means of various valves, a pump and the filter itself. Water is put
+   into the system and monitored with a flow meter. A user inputs the
+   desired amount of water and once that value is met the water is cut off
+   and the system is cleaned, with pathogen samples prepared for collection.
+*/
+
+//---------------------Defining Inputs and Outputs------------------------------
+
+//Defining Valves
+#define V1 PORTD.B0
+#define V2 PORTD.B1
+#define V3 PORTD.B2
+#define V4 PORTD.B3
+#define V5 PORTD.B4
+#define V6 PORTD.B5
+#define V7 PORTD.B6
+
+//Defining the Pump
+#define P PORTD.B7
+
+//Defining the LCD
+#define D4 PORTB.B0
+#define D5 PORTB.B1
+#define D6 PORTB.B2
+#define D7 PORTB.B3
+#define RS PORTB.B4
+#define EN PORTB.B5
+
+//Defining Sensors
+#define S1 PORTC.B0             //Bottom Tank Sensor (Ultrasonic)
+#define S2 PORTC.B1             //Backflush sensor (Ultrasonic)
+#define S3 PORTC.B2             //Top Tank Sensor (Ultrasonic)
+#define S4 PORTC.B3             //Concentrate Sensor (Ultrasonic)
+
+//Defining the Flow Meter
+#define FM PORTC.B4
+
+//Defining Control Panel Buttons
+#define clean PORTE.B0
+#define STOP PORTC.B6
+#define reset PORTC.B5
+#define PressureReading PORTA.B0
+
+//-----------------------------LCD Module Connections---------------------------
+
+sbit LCD_RS at RB4_bit;
+sbit LCD_EN at RB5_bit;
+sbit LCD_D4 at RB0_bit;
+sbit LCD_D5 at RB1_bit;
+sbit LCD_D6 at RB2_bit;
+sbit LCD_D7 at RB3_bit;
+
+sbit LCD_RS_Direction at TRISB4_bit;
+sbit LCD_EN_Direction at TRISB5_bit;
+sbit LCD_D4_Direction at TRISB0_bit;
+sbit LCD_D5_Direction at TRISB1_bit;
+sbit LCD_D6_Direction at TRISB2_bit;
+sbit LCD_D7_Direction at TRISB3_bit;
+
+//---------------------------------LCD Messages---------------------------------
+
+char txt2[] = "BackFlush";
+char txt3[] = "Sample Ready";
+char txt6[] = "Complete";
+char txt7[] = "System Ready";
+char txt8[] = "Low";
+char txt9[] = "Litres";
+char txt10[] = "In Progress";
+char txt11[] = "System";
+char txt12[] = "Ready";
+char txt13[] = "Filling";
+char txt15[] = "Filtering";
+char txt16[] = "Full";
+char txt17[] = "Emergency";
+char txt18[] = "Check & Reset";
+char txt19[] = "Reset";
+char txt20[] = "Succesful";
+char txt21[5];
+char txt22[] = "Counter";
+char txt23[5];
+
+//-----------------------------------Integers-----------------------------------
+
+int VP = 0;   /*VP = Volume Processed. The amount of water processed through the
+                     system in a given cycle. Set to 0 by default, controlled 
+                     by the pulses of the flow meter and increased in incriments
+              */
+
+int VR = 5; /*VR = Volume Required. The amount of water required to collect a
+                     sufficient sample size. This value is set by the user. Once
+                     integer [VP] is equal to this value, the correct amount of
+                     water has been processed. Set to 5 for test purposes.
+              */
+              
+int pressure = 0; // The amount of pressure in the system. Monitored for safety.
+                  // Set to 0 for simulation purposes
+                  
+int maxpressure = 5; // The maximum pressure a system can
+                  
+int VPT = 0;      //The total amount of water processed through the system.
+
+//-------------------------Valve Control Functions------------------------------
+
+/*
+The valves in this system have to be open and closed and changed constantly to
+ensure smooth and safe operation of the system. However, there are some common
+combinations of valves. This section sets functions to quickly switch between
+these common states.
+*/
+
+//When we want to have WATER through the filter
+void Filter() {
+
+     V1 = 1;
+     V2 = 0; //Ensures no cleaning fluid contaminates water sample
+     V3 = 1;
+     V4 = 1;
+     V5 = 1;
+     V6 = 0; //Ensures samples are not collected until we want them
+     P  = 1; //The pump needs to be on to filter the water
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt15);
+     Lcd_Out(2,1,txt10);
+     delay_ms(3000);
+     
+     return;
+}
+
+//When we want to backflush the system. NO WATER for filtration
+void Backflush() {
+     V1 = 0; //Ensures no water flows from the tank
+     V2 = 1;
+     V3 = 1;
+     V4 = 1;
+     V5 = 0; //Ensures no samples are lost
+     V6 = 1;
+     P  = 1; //The pump is on to process cleaning fluid through the pump
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt2);
+     Lcd_Out(2,1,txt10);
+     delay_ms(5000);
+     
+     V1 = 0; //Close all Valves ready for next duty cycle
+     V2 = 0;
+     V3 = 0;
+     V4 = 0;
+     V5 = 0;
+     V6 = 0;
+     V7 = 0;
+     P  = 0; //The pump is off
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt2);
+     Lcd_Out(2,1,txt6);
+     delay_ms(3000);
+     
+     return;
+     
+     
+}
+
+//------------------------------Overflow Function-------------------------------
+
+void overflow() {
+     V7 = 0;
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(2,1,txt16);
+     delay_ms(2000);
+     
+     return;
+}
+
+//-------------------------------Emergency Stop---------------------------------
+void emergency() {
+
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt17);
+     Lcd_Out(2,1,txt18);
+     
+     while (reset == 0){
+     V1 = 0; //Ensures no water flows from the tank
+     V2 = 0;
+     V3 = 0;
+     V4 = 0;
+     V5 = 0; //Ensures no samples are lost
+     V6 = 0;
+     V7 = 0;
+     P  = 0; //The pump is off
+     }
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt19);
+     Lcd_Out(2,1,txt20);
+     delay_ms(3000);
+     
+     }
+
+//---------------------------------Setup----------------------------------------
+/*
+This function sets up the board's ports to the desired configuration
+*/
+void setup() {
+
+     ANSEL = 0;
+     ANSELH = 0;
+    
+     TRISA = 0;  //Sets PortA as an Output
+     TRISC = 1;  //Sets PortC as an Input
+     TRISD = 0;  //Sets PortD as an output
+     TRISE = 1; //Sets Port E as an Input
+
+     PORTA = 0;           //Clears Ports
+     PORTB = 0;
+     PORTC = 0;
+     PORTD = 0;
+
+     Lcd_Init(); // Initialise LCD
+     Lcd_Cmd(_LCD_CURSOR_OFF);
+}
+
+//-------------------------Intitilisation Function------------------------------
+void initiisation() {
+
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt11);
+     Lcd_Out(2,1,txt12);
+     delay_ms(2000);
+}
+
+//-------------------------Flow Meter Interrupt---------------------------------
+
+
+
+void interrupt(){
+     if (VP > 5){
+     V7 = 0;
+     }
+}
+
+//-----------------------------Fill Function------------------------------------
+/* This function fills the 5 litre tank when the flow meter is triggered by
+   water running through it.
+*/
+
+void fill() {
+
+     V7 = 1;
+     
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(2,1,txt13);
+     delay_ms(3000);
+
+     return;
+}
+//---------------------------------Counter Reset--------------------------------
+/* Once the required amount of water has been taken into the system, the intake
+   valve should close. This would generally be done with an interrupt however
+   due to the hardware limitations of this system, this cruder method has been
+   devised. Should the user wish to see the total amount of water the system has
+   taken in they should bring up variable VPT by means of the control panel.
+*/
+
+void counter() {
+
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt13);
+     Lcd_Out(2,1,txt6);
+     delay_ms(3000);
+
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt22);
+     Lcd_Out(2,1,txt19);
+     delay_ms(2000);
+
+     V7 = 0;
+     VP = 0;
+     
+}
+//----------------------------------Main Function-------------------------------
+void main() {
+    
+     setup();
+     initiisation();
+
+     while(1){
+     
+     ByteToStr(VP,txt21);     //Allows VP to be displayed on the LCD
+     lCD_Cmd(_LCD_CLEAR);     // These 4 lines outputs the VP to the display
+     Lcd_Out(1,1,txt9);
+     Lcd_Out(2,1,txt21);
+     delay_ms(1000);
+     
+     if (FM == 1){
+     VP = VP +1;
+     }
+     
+     if (FM == 1){
+     fill();
+     }
+     
+     if (S1 == 1){
+     Filter();
+     }
+     
+     if (S3 == 1){
+     overflow();
+     }
+     
+     if (clean == 1){
+     Backflush();
+     }
+
+     if (STOP == 1){
+     emergency();
+     }
+     
+     if (VP == VR){
+     counter();
+     }
+     
+     if (PressureReading == 1){
+     pressure = pressure +1;
+     }
+     
+     if (pressure == maxpressure){
+     emergency();
+     pressure = 0;
+     }
+     
+     if (S2 == 1){
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt2);
+     Lcd_Out(2,1,txt8);
+     delay_ms(3000);
+     }
+     
+     if (S4 == 1){
+     lCD_Cmd(_LCD_CLEAR);
+     Lcd_Out(1,1,txt3);
+     delay_ms(3000);
+     }
+ }
+}
